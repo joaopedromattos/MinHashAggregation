@@ -52,7 +52,7 @@ class MinHashClustering:
     
 if __name__ == '__main__':
     
-    data, pyg_data = load_dataset("Karate")
+    data, pyg_data = load_dataset("CiteSeer")
     
     x = torch.arange(data.num_nodes)[:, None]
     
@@ -64,13 +64,14 @@ if __name__ == '__main__':
     # Otherwise the node that has the minhash will not
     # be able to "link" two subgraphs.
     data.edge_index = add_self_loops(data.edge_index)[0]
+        
     
-    # new_edge_index = add_k_hop_edges(data, k=2)
+    min_hash_clustering_hashes = [MinHashClustering(d=maxsize, seed=1, num_layers=30), 
+                                  MinHashClustering(d=maxsize, seed=2, num_layers=30)]
     
-    min_hash_clustering_hashes = [MinHashClustering(d=maxsize, seed=1, num_layers=6), 
-                                  MinHashClustering(d=maxsize, seed=2, num_layers=6)]
     
     output = torch.zeros((data.num_nodes, len(min_hash_clustering_hashes)), dtype=torch.int64)
+    
     for i, min_hash_clustering in enumerate(min_hash_clustering_hashes):
         
         cur_output = min_hash_clustering(x, data.edge_index)
@@ -78,20 +79,16 @@ if __name__ == '__main__':
         output[:, i] = cur_output.squeeze(1)
     
     
-    output = convert_to_single_hash(output)
-    
-            
-    for cur_cluster in output.unique():
-        test = data.subgraph(output.squeeze(1) == cur_cluster)
-        test_nx = torch_geometric.utils.to_networkx(test)
-        print(f"Cluster {cur_cluster} ({test.num_nodes}) is connected...", nx.is_connected(test_nx.to_undirected()))    
+    output = convert_to_single_hash(output)            
     
     edge_cut_percentage = edge_cut(output, data.edge_index)
     print(f"[Minhash] - Edge cut: {edge_cut_percentage}")
     
     for cur_cluster in output.unique():
-        classes, counts = data.subgraph(output.squeeze(1) == cur_cluster).y.unique(return_counts=True)
+        test = data.subgraph(output.squeeze(1) == cur_cluster)
+        test_nx = torch_geometric.utils.to_networkx(test)
         
-        print(f"Cluster {cur_cluster} ({data.subgraph(output.squeeze(1) == cur_cluster).num_nodes} nodes)")
-        print([f"{cur_class}: {cur_count}" for cur_class, cur_count in zip(classes, counts)])
+        classes, counts = test.y.unique(return_counts=True)
+        
+        print(f"Cluster {cur_cluster} ({test.num_nodes}) is connected...", nx.is_connected(test_nx.to_undirected()), " - Classes:", [f"{cur_class}: {cur_count}" for cur_class, cur_count in zip(classes, counts)])
     

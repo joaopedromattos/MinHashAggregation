@@ -1,22 +1,8 @@
 import torch
-import numpy as np
-import random
-from torch.utils.data import DataLoader, Dataset
 from torch_geometric.datasets import Planetoid, Amazon, KarateClub
 from ogb.linkproppred import PygLinkPropPredDataset
-from torch_geometric.utils import negative_sampling, add_self_loops, train_test_split_edges, k_hop_subgraph
-from torch_geometric.transforms import RandomLinkSplit
-from tqdm import tqdm
-import argparse 
-from ast import literal_eval
-import code
-import torch_geometric
-import os
+
 from torch_sparse.tensor import SparseTensor
-from itertools import combinations
-from tqdm import tqdm
-import scipy.sparse as ssp
-import datetime
 
 
 
@@ -62,7 +48,7 @@ def add_k_hop_edges(data, k=2):
     return torch.vstack((final_edge_index.storage.row(), final_edge_index.storage.col()))
 
 
-convert_to_single_hash = lambda x: x @ torch.tensor([2**32 - 1, 1]).unsqueeze(1)
+convert_to_single_hash = lambda x: (x @ torch.tensor([2**32 - 1, 1]).unsqueeze(1)).to(torch.int64)
 
 
 def edge_cut(clusters, edges):
