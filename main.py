@@ -1,68 +1,57 @@
 import torch
-from torch.nn import Linear, Parameter
-from torch_geometric.nn import MessagePassing
-from torch_geometric.utils import add_self_loops, degree
-
+from torch_geometric.utils import add_self_loops
 import torch
 import torch_geometric
-
-
-import math
-from typing import Any, Optional
-
+from typing import Any
 import torch
 from torch import Tensor
-from torch.nn import Parameter
-
-from torch_geometric.nn.aggr import Aggregation
-from torch_geometric.utils import softmax
 from sklearn.utils import murmurhash3_32
-
 import numpy as np
-
 import torch
-from torch.nn import Linear, Parameter
-from torch_geometric.nn import MessagePassing, Sequential
-from torch_geometric.utils import add_self_loops, spmm
+from torch_geometric.utils import add_self_loops
 import torch_geometric.transforms as T
-
 from torch_geometric.nn import aggr
-
-from typing import Union
-
 from sys import maxsize
-
 import code
 import networkx as nx
-
-from utils import load_dataset
-
+from utils import load_dataset, add_k_hop_edges, edge_cut, convert_to_single_hash
 from tqdm import tqdm
+from random import Random
 
 
 class MinHashClustering:
-    def __init__(self, d: Union[list, int], seed: Union[list, int]) -> None:
+    def __init__(self, d: int, seed: int, num_layers:int) -> None:
         self.d = d
-        self.seed = seed
+        self.random = Random(seed)
+        self.num_layers = num_layers
         
+        self.random_seeds = [self.random.randint(0, 2**32 - 1) for i in range(num_layers)]
+
         # We will use PyG MinAggregation to
         # aggregate the minimum hash in each node's neighborhood
         self.min_aggr = aggr.MinAggregation()
-    
+               
     def __call__(self, x: Tensor, edge_index: Tensor, *args: Any, **kwds: Any) -> Tensor:
         
-        x = np.array(x, dtype=np.int32)
+        # x: (N, 1)
+        hashes = x
         
-        hashes = torch.tensor((murmurhash3_32(x, positive=True, seed=self.seed) % self.d), dtype=torch.int64)
+        for i in range(self.num_layers):            
+            
+            hashes = np.array(hashes.squeeze(1), dtype=np.int32)
+            
+            hashes = torch.tensor((murmurhash3_32(hashes, positive=True, seed=self.random_seeds[i]) % self.d), dtype=torch.int64)
         
-        # This aggregates following "source to target"
-        hashes = self.min_aggr(hashes[edge_index[0]], edge_index[1])
+            hashes = hashes[:, None]
+
+            # This aggregates following "source to target"
+            hashes = self.min_aggr(hashes[edge_index[0]], edge_index[1])
         
         return hashes
     
     
 if __name__ == '__main__':
-
+    
     data, pyg_data = load_dataset("Karate")
     
     x = torch.arange(data.num_nodes)[:, None]
@@ -76,26 +65,33 @@ if __name__ == '__main__':
     # be able to "link" two subgraphs.
     data.edge_index = add_self_loops(data.edge_index)[0]
     
-    num_layers = 1 # Running with a single layer for now
-    min_hash_clustering_hashes = [MinHashClustering(d=maxsize, seed=i) for i in range(num_layers)]
+    # new_edge_index = add_k_hop_edges(data, k=2)
     
-    output = x
+    min_hash_clustering_hashes = [MinHashClustering(d=maxsize, seed=1, num_layers=6), 
+                                  MinHashClustering(d=maxsize, seed=2, num_layers=6)]
     
-    for min_hash_clustering in tqdm(min_hash_clustering_hashes):
-        print(output)
-        output = min_hash_clustering(output, data.edge_index)
-    
-        # Sanity checks
-        test_nx = torch_geometric.utils.to_networkx(data)
-        print("Input graph is connected...", nx.is_connected(test_nx.to_undirected()))
+    output = torch.zeros((data.num_nodes, len(min_hash_clustering_hashes)), dtype=torch.int64)
+    for i, min_hash_clustering in enumerate(min_hash_clustering_hashes):
         
-        for cur_cluster in output.unique():
-            test = data.subgraph(output.squeeze(1) == cur_cluster)
-            test_nx = torch_geometric.utils.to_networkx(test)
-            print(f"Cluster {cur_cluster} ({test.num_nodes}) is connected...", nx.is_connected(test_nx.to_undirected()))
+        cur_output = min_hash_clustering(x, data.edge_index)
+        
+        output[:, i] = cur_output.squeeze(1)
+    
+    
+    output = convert_to_single_hash(output)
+    
             
-    # Opens interactive mode to inspection
-    print("Interactive mode - Ctrl + D to leave...")
-    code.interact(local=locals())
-
+    for cur_cluster in output.unique():
+        test = data.subgraph(output.squeeze(1) == cur_cluster)
+        test_nx = torch_geometric.utils.to_networkx(test)
+        print(f"Cluster {cur_cluster} ({test.num_nodes}) is connected...", nx.is_connected(test_nx.to_undirected()))    
+    
+    edge_cut_percentage = edge_cut(output, data.edge_index)
+    print(f"[Minhash] - Edge cut: {edge_cut_percentage}")
+    
+    for cur_cluster in output.unique():
+        classes, counts = data.subgraph(output.squeeze(1) == cur_cluster).y.unique(return_counts=True)
+        
+        print(f"Cluster {cur_cluster} ({data.subgraph(output.squeeze(1) == cur_cluster).num_nodes} nodes)")
+        print([f"{cur_class}: {cur_count}" for cur_class, cur_count in zip(classes, counts)])
     
