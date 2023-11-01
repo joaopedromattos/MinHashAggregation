@@ -66,8 +66,8 @@ if __name__ == '__main__':
     data.edge_index = add_self_loops(data.edge_index)[0]
         
     
-    min_hash_clustering_hashes = [MinHashClustering(d=maxsize, seed=1, num_layers=30), 
-                                  MinHashClustering(d=maxsize, seed=2, num_layers=30)]
+    min_hash_clustering_hashes = [MinHashClustering(d=maxsize, seed=1, num_layers=2), 
+                                  MinHashClustering(d=maxsize, seed=2, num_layers=2)]
     
     
     output = torch.zeros((data.num_nodes, len(min_hash_clustering_hashes)), dtype=torch.int64)
