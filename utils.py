@@ -48,7 +48,7 @@ def add_k_hop_edges(data, k=2):
     return torch.vstack((final_edge_index.storage.row(), final_edge_index.storage.col()))
 
 
-convert_to_single_hash = lambda x: (x @ torch.tensor([2**32 - 1, 1]).unsqueeze(1)).to(torch.int64)
+convert_to_single_hash = lambda x: (x.to(torch.int64) @ torch.tensor([2**32 - 1, 1]).unsqueeze(1).to(torch.int64))
 
 
 def edge_cut(clusters, edges):

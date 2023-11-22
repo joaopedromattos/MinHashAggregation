@@ -56,7 +56,10 @@ if __name__ == '__main__':
     
     x = torch.arange(data.num_nodes)[:, None]
     
-    transform = T.Compose([T.ToUndirected(), T.LargestConnectedComponents(connection='strong')])
+    # Ideally, to test our method we want to ensure that our initial network
+    # is connected and undirected. We can do this by using the following transform.
+    transform = T.Compose([T.ToUndirected(), 
+                           T.LargestConnectedComponents(connection='strong')])
     
     data = transform(data)
     
@@ -66,6 +69,8 @@ if __name__ == '__main__':
     data.edge_index = add_self_loops(data.edge_index)[0]
         
     
+    # These are the minhashes that we will concatenate at the end.
+    # Each minhash added will corespond to an additional hash in the end.   
     min_hash_clustering_hashes = [MinHashClustering(d=maxsize, seed=1, num_layers=2), 
                                   MinHashClustering(d=maxsize, seed=2, num_layers=2)]
     

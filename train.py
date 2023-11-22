@@ -136,6 +136,7 @@ if __name__ == '__main__':
         data.edge_index = add_self_loops(data.edge_index)[0]
         new_edge_index = add_k_hop_edges(data, k=2)
 
-        min_hash_clustering_hashes = [MinHashClustering(d=maxsize, seed=[1, 2]), MinHashClustering(d=maxsize, seed=[3, 4])]
+        min_hash_clustering_hashes = [MinHashClustering(d=maxsize, seed=1, num_layers=2), 
+                                  MinHashClustering(d=maxsize, seed=2, num_layers=2)]
         
         
